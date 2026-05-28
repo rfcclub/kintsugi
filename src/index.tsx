@@ -1,0 +1,53 @@
+#!/usr/bin/env node
+
+/**
+ * kintsugi — Kintsugi Ink runtime
+ */
+
+import React from "react";
+import { render } from "ink";
+import { parseArgs } from "./cli/args.js";
+import { App } from "./ui/App.js";
+import { createProvider } from "./providers/registry.js";
+import { resolveConfig } from "./config/config.js";
+import { ConfigView } from "./ui/views/ConfigView.js";
+import { HelpView } from "./ui/views/HelpView.js";
+
+try {
+  const args = parseArgs(process.argv.slice(2));
+
+  if (args.command === "help") {
+    render(<HelpView />);
+  } else if (args.command === "remember") {
+    const { RememberView } = await import("./ui/views/RememberView.js");
+    render(React.createElement(RememberView, {
+      options: {
+        kind: args.rememberKind,
+        actor: args.rememberActor,
+        limit: args.rememberLimit,
+        learned: args.rememberLearned,
+      },
+    }));
+  } else if (args.command === "config") {
+    render(<ConfigView initConfig={args.initConfig} show={args.configShow} doctor={args.configDoctor} />);
+  } else {
+    const config = resolveConfig(args);
+
+    // For TUI with default mock provider, defer provider creation to the picker
+    const showPicker = args.command === "tui" && args.provider === "mock" && !args.model;
+    const needsProvider = args.command === "ask" || args.command === "tui";
+    const provider = !needsProvider || showPicker
+      ? undefined
+      : createProvider(config.provider, {
+          ...config.providerSettings,
+          ...config.modelConfig,
+          model: config.model ?? config.providerSettings.model,
+        });
+
+    render(<App args={args} config={config} provider={provider} showPicker={showPicker} />);
+  }
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(`kintsugi: ${message}`);
+  process.exit(1);
+}

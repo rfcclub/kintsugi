@@ -1,0 +1,8 @@
+node_modules/
+dist/
+coverage/
+.serena/
+.env
+.env.*
+!.env.example
+npm-debug.log*

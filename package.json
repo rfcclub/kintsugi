@@ -1,0 +1,43 @@
+{
+  "name": "kintsugi",
+  "version": "1.0.0",
+  "description": "Kintsugi workshop — Ink CLI runtime",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "kintsugi": "dist/index.js"
+  },
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "npm run clean && tsc",
+    "lint": "tsc --noEmit",
+    "start": "node dist/index.js",
+    "dev": "tsc && node dist/index.js",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
+    "test:providers": "vitest run tests/provider-presets.test.ts tests/config-doctor-provider.test.ts tests/provider-conformance.test.ts tests/live-provider-matrix.test.ts",
+    "test:open-phases": "npm run build && node scripts/test-open-phases.mjs",
+    "test:kintsugi": "bash scripts/test-kintsugi.sh",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "cli",
+    "runtime",
+    "kintsugi"
+  ],
+  "author": "Kintsugi",
+  "license": "ISC",
+  "dependencies": {
+    "ink": "^7.0.3",
+    "ink-text-input": "^6.0.0",
+    "react": "^19.2.6",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.41",
+    "@types/react": "^19.2.15",
+    "@vitest/coverage-v8": "^4.1.7",
+    "typescript": "^5.0.0",
+    "vitest": "^4.1.7"
+  }
+}
