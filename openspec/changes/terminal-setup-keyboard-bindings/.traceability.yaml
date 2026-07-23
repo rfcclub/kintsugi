@@ -1,0 +1,9 @@
+scenarios:
+  - scenario: prompt-input-field-shall-support-multiline-entries-enter-multiline-prompt
+    status: passing
+  - scenario: key-handlers-shall-abort-active-streams-and-tasks-interrupt-active-llm-response-stream
+    status: passing
+  - scenario: layout-shall-dynamically-adjust-to-window-resizing-resize-terminal-window
+    status: passing
+  - scenario: terminal-terminal-states-shall-be-restored-on-exit-exit-kintsugi-safely
+    status: passing

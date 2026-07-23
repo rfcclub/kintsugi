@@ -1,0 +1,10 @@
+{
+  "change": "subagents-parallelism-isolation",
+  "timestamp": "2026-06-20T02:58:18.721Z",
+  "total_scenarios": 4,
+  "passing": 4,
+  "coverage": 1,
+  "threshold": 100,
+  "passed": true,
+  "uncovered": []
+}

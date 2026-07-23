@@ -99,10 +99,35 @@ providerPresets:
       adapter: "openai-chat",
       baseUrl: "http://localhost:1234/v1",
       keyFile: "~/local.key",
-      defaultModel: "local-model",
     });
   });
+
+  it("resolves a custom preset for crof.ai with openai-chat adapter", () => {
+    const file = tempConfig(`
+providerPresets:
+  crof-deep:
+    adapter: openai-chat
+    baseUrl: https://crof.ai/v1
+    defaultModel: deepseek-v4-flash
+modelProfile: crof-profile
+modelProfiles:
+  crof-profile:
+    preset: crof-deep
+`);
+
+    const resolved = resolveConfig(parseArgs(["ask", "hi"]), {
+      homeConfigPath: file,
+      repoConfigPath: join(file, "missing"),
+      env: {},
+    });
+
+    expect(resolved.providerPreset).toBe("crof-deep");
+    expect(resolved.provider).toBe("openai-chat");
+    expect(resolved.providerSettings.baseUrl).toBe("https://crof.ai/v1");
+    expect(resolved.model).toBe("deepseek-v4-flash");
+  });
 });
+
 
 function tempConfig(contents: string): string {
   const dir = mkdtempSync(join(tmpdir(), "kintsugi-provider-presets-"));

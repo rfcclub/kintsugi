@@ -427,6 +427,7 @@ modelProfiles:
         noSubstrate: true,
         providerSettings: {},
         permissions: { rules: [] },
+        hooks: { mode: "strict", timeoutMs: 5000, pre: {}, post: {} },
         sources: [],
       });
 
@@ -445,6 +446,7 @@ modelProfiles:
         keyFile: "/tmp/kintsugi-key",
         providerSettings: { keyFile: "/tmp/kintsugi-key" },
         permissions: { rules: [] },
+        hooks: { mode: "strict", timeoutMs: 5000, pre: {}, post: {} },
         sources: [],
       });
 
@@ -461,6 +463,7 @@ modelProfiles:
           noSubstrate: true,
           providerSettings: {},
           permissions: { rules: [] },
+          hooks: { mode: "strict", timeoutMs: 5000, pre: {}, post: {} },
           sources: [],
         },
         { keyFile: "~/definitely-missing-kintsugi-key" }
@@ -472,6 +475,220 @@ modelProfiles:
       });
     });
   });
+
+  it("resolves default and custom hooks configs successfully", () => {
+    const config = resolveConfig({} as any, {
+      env: {},
+      repoConfigPath: undefined,
+      homeConfigPath: undefined,
+      cwd: process.cwd()
+    });
+    expect(config.hooks).toBeDefined();
+    expect(config.hooks.mode).toBe("strict");
+    expect(config.hooks.timeoutMs).toBe(5000);
+    expect(config.hooks.pre).toEqual({});
+    expect(config.hooks.post).toEqual({});
+    
+    // Test custom override merging
+    const customConfig = resolveConfig({} as any, {
+      env: {},
+      repoConfigPath: undefined,
+      homeConfigPath: undefined,
+      cwd: process.cwd()
+    });
+    const mergedHooks = {
+      mode: "permissive" as const,
+      timeoutMs: 2000,
+      pre: { edit_file: "npm run lint" },
+      post: { write_file: "vitest run" }
+    };
+    const resolvedCustom = { ...customConfig, hooks: mergedHooks };
+    expect(resolvedCustom.hooks.mode).toBe("permissive");
+    expect(resolvedCustom.hooks.timeoutMs).toBe(2000);
+    expect(resolvedCustom.hooks.pre).toEqual({ edit_file: "npm run lint" });
+  });
+
+  describe("mcpServers", () => {
+    it("parses valid mcpServers config", () => {
+      const file = tempConfig(`
+provider: mock
+mcpServers:
+  filesystem:
+    command: npx
+    args: ["-y", "@modelcontextprotocol/server-filesystem"]
+    env:
+      ROOT: /tmp
+      `);
+      const opts = {
+        env: {},
+        repoConfigPath: file,
+        homeConfigPath: undefined,
+        cwd: process.cwd(),
+      };
+      const config = resolveConfig({} as any, opts);
+      expect(config.mcpServers).toBeDefined();
+      expect(config.mcpServers!.filesystem.command).toBe("npx");
+      expect(config.mcpServers!.filesystem.args).toEqual(["-y", "@modelcontextprotocol/server-filesystem"]);
+      expect(config.mcpServers!.filesystem.env!.ROOT).toBe("/tmp");
+    });
+
+    it("returns undefined when mcpServers not present", () => {
+      const file = tempConfig(`
+provider: mock
+      `);
+      const opts = {
+        env: {},
+        repoConfigPath: file,
+        homeConfigPath: undefined,
+        cwd: process.cwd(),
+      };
+      const config = resolveConfig({} as any, opts);
+      expect(config.mcpServers).toBeUndefined();
+    });
+
+    it("throws when mcpServers is not an object", () => {
+      const file = tempConfig(`
+provider: mock
+mcpServers: 42
+      `);
+      const opts = {
+        env: {},
+        repoConfigPath: file,
+        homeConfigPath: undefined,
+        cwd: process.cwd(),
+      };
+      expect(() => resolveConfig({} as any, opts)).toThrow(/mcpServers must be an object/);
+    });
+
+    it("throws when mcpServers entry is not an object", () => {
+      const file = tempConfig(`
+provider: mock
+mcpServers:
+  bad: 42
+      `);
+      const opts = {
+        env: {},
+        repoConfigPath: file,
+        homeConfigPath: undefined,
+        cwd: process.cwd(),
+      };
+      expect(() => resolveConfig({} as any, opts)).toThrow(/mcpServers\.bad must be an object/);
+    });
+
+    it("throws when mcpServers entry missing command", () => {
+      const file = tempConfig(`
+provider: mock
+mcpServers:
+  bad:
+    args: ["x"]
+      `);
+      const opts = {
+        env: {},
+        repoConfigPath: file,
+        homeConfigPath: undefined,
+        cwd: process.cwd(),
+      };
+      expect(() => resolveConfig({} as any, opts)).toThrow(/command/);
+    });
+
+    it("throws when mcpServers.env is not an object", () => {
+      const file = tempConfig(`
+provider: mock
+mcpServers:
+  bad:
+    command: echo
+    env: 42
+      `);
+      const opts = {
+        env: {},
+        repoConfigPath: file,
+        homeConfigPath: undefined,
+        cwd: process.cwd(),
+      };
+      expect(() => resolveConfig({} as any, opts)).toThrow(/mcpServers\.bad\.env must be an object/);
+    });
+
+    it("parses mcpServers without args or env", () => {
+      const file = tempConfig(`
+provider: mock
+mcpServers:
+  simple:
+    command: echo
+      `);
+      const opts = {
+        env: {},
+        repoConfigPath: file,
+        homeConfigPath: undefined,
+        cwd: process.cwd(),
+      };
+      const config = resolveConfig({} as any, opts);
+      expect(config.mcpServers!.simple.command).toBe("echo");
+      expect(config.mcpServers!.simple.args).toBeUndefined();
+      expect(config.mcpServers!.simple.env).toBeUndefined();
+    });
+  });
+
+  describe("hooks validation", () => {
+    it("throws when hooks is not an object", () => {
+      const file = tempConfig(`
+provider: mock
+hooks: 42
+      `);
+      const opts = {
+        env: {},
+        repoConfigPath: file,
+        homeConfigPath: undefined,
+        cwd: process.cwd(),
+      };
+      expect(() => resolveConfig({} as any, opts)).toThrow(/hooks must be an object/);
+    });
+
+    it("throws when hooks.mode is invalid", () => {
+      const file = tempConfig(`
+provider: mock
+hooks:
+  mode: "invalid"
+      `);
+      const opts = {
+        env: {},
+        repoConfigPath: file,
+        homeConfigPath: undefined,
+        cwd: process.cwd(),
+      };
+      expect(() => resolveConfig({} as any, opts)).toThrow(/hooks.mode must be strict or permissive/);
+    });
+
+    it("throws when hooks.pre is not an object", () => {
+      const file = tempConfig(`
+provider: mock
+hooks:
+  pre: 42
+      `);
+      const opts = {
+        env: {},
+        repoConfigPath: file,
+        homeConfigPath: undefined,
+        cwd: process.cwd(),
+      };
+      expect(() => resolveConfig({} as any, opts)).toThrow(/hooks\.pre must be an object/);
+    });
+
+    it("throws when hooks.post has non-string value", () => {
+      const file = tempConfig(`
+provider: mock
+hooks:
+  post:
+    key: 42
+      `);
+      const opts = {
+        env: {},
+        repoConfigPath: file,
+        homeConfigPath: undefined,
+        cwd: process.cwd(),
+      };
+      expect(() => resolveConfig({} as any, opts)).toThrow(/hooks\.post\.key must be a string/);
+    });
+  });
 });
 
 function tempConfig(contents: string): string {
@@ -479,4 +696,267 @@ function tempConfig(contents: string): string {
   const file = path.join(dir, "config.yaml");
   writeFileSync(file, contents.trimStart(), "utf-8");
   return file;
+}
+
+// ─── Coverage-targeted tests (mapped to uncovered lines) ───
+// Each test targets a specific uncovered line range in config.ts
+
+// L207-232: mcp.json parsing when file exists
+// L153: expandUserPath("~/") branch
+// L317-335: optionalProviderSettings env-var overrides
+// L547-579: optionalModelProfiles validation
+// L602-644: optionalModelConfig validation
+// L686: optionalProviders entry not object
+// L705: optionalProviderSettings not object
+// L732-735: optionalReasoningEffort invalid value
+
+describe("coverage: mcp.json file parsing (L207-232)", () => {
+  it("loads mcpServers from .kintsugi/mcp.json when file exists", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "kintsugi-mcpjson-"));
+    const cfg = tempConfig(`provider: mock\n`);
+  const mcpDir = path.join(dir, ".kintsugi");
+  mkdirSync(mcpDir, { recursive: true });
+  writeFileSync(path.join(mcpDir, "mcp.json"), JSON.stringify({
+  mcpServers: { jsonsrv: { command: "node" } },
+  }));
+  const config = resolveConfig({} as any, {
+  env: {},
+  repoConfigPath: cfg,
+  homeConfigPath: undefined,
+  cwd: dir,
+  });
+  expect(config.mcpServers!.jsonsrv.command).toBe("node");
+  });
+
+  it("throws on malformed mcp.json", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "kintsugi-mcpjson-"));
+    const cfg = tempConfig(`provider: mock\n`);
+  const mcpDir = path.join(dir, ".kintsugi");
+  mkdirSync(mcpDir, { recursive: true });
+  writeFileSync(path.join(mcpDir, "mcp.json"), "{not valid json");
+  expect(() => resolveConfig({} as any, {
+  env: {},
+  repoConfigPath: cfg,
+  homeConfigPath: undefined,
+  cwd: dir,
+  })).toThrow(/Failed to parse .*mcp\.json/);
+  });
+
+  it("ignores mcp.json if mcpServers key absent", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "kintsugi-mcpjson-"));
+    const cfg = tempConfig(`provider: mock\n`);
+  const mcpDir = path.join(dir, ".kintsugi");
+  mkdirSync(mcpDir, { recursive: true });
+  writeFileSync(path.join(mcpDir, "mcp.json"), JSON.stringify({ other: true }));
+  const config = resolveConfig({} as any, {
+  env: {},
+  repoConfigPath: cfg,
+  homeConfigPath: undefined,
+  cwd: dir,
+  });
+  expect(config.mcpServers).toBeUndefined();
+  });
+
+  it("ignores mcp.json if root is array", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "kintsugi-mcpjson-"));
+    const cfg = tempConfig(`provider: mock\n`);
+  const mcpDir = path.join(dir, ".kintsugi");
+  mkdirSync(mcpDir, { recursive: true });
+  writeFileSync(path.join(mcpDir, "mcp.json"), "[]");
+  const config = resolveConfig({} as any, {
+  env: {},
+  repoConfigPath: cfg,
+  homeConfigPath: undefined,
+  cwd: dir,
+  });
+  expect(config.mcpServers).toBeUndefined();
+  });
+});
+
+describe("coverage: env-var overrides (L317-335)", () => {
+  afterEach(() => {
+  vi.unstubAllEnvs();
+  });
+
+  it("applies KINTSUGI_KEY_FILE override", () => {
+  const file = tempConfig(`provider: mock\nkeyFile: /default\n`);
+  vi.stubEnv("KINTSUGI_KEY_FILE", "~/override");
+  const config = resolveConfig({} as any, {
+  env: process.env,
+  repoConfigPath: file,
+  homeConfigPath: undefined,
+  cwd: process.cwd(),
+  });
+  expect(config.providerSettings.keyFile).toContain("override");
+  });
+
+  it("applies KINTSUGI_MAX_TOKENS override", () => {
+  const file = tempConfig(`provider: mock\n`);
+  vi.stubEnv("KINTSUGI_MAX_TOKENS", "9999");
+  const config = resolveConfig({} as any, {
+  env: process.env,
+  repoConfigPath: file,
+  homeConfigPath: undefined,
+  cwd: process.cwd(),
+  });
+  expect(config.providerSettings.maxTokens).toBe(9999);
+  });
+
+  it("applies KINTSUGI_TIMEOUT_MS override", () => {
+  const file = tempConfig(`provider: mock\n`);
+  vi.stubEnv("KINTSUGI_TIMEOUT_MS", "7000");
+  const config = resolveConfig({} as any, {
+  env: process.env,
+  repoConfigPath: file,
+  homeConfigPath: undefined,
+  cwd: process.cwd(),
+  });
+  expect(config.providerSettings.timeoutMs).toBe(7000);
+  });
+
+  it("applies KINTSUGI_ANTHROPIC_VERSION override", () => {
+  const file = tempConfig(`provider: mock\n`);
+  vi.stubEnv("KINTSUGI_ANTHROPIC_VERSION", "2024-01-01");
+  const config = resolveConfig({} as any, {
+  env: process.env,
+  repoConfigPath: file,
+  homeConfigPath: undefined,
+  cwd: process.cwd(),
+  });
+  expect(config.providerSettings.anthropicVersion).toBe("2024-01-01");
+  });
+
+  it("applies KINTSUGI_TEMPERATURE override", () => {
+  const file = tempConfig(`provider: mock\n`);
+  vi.stubEnv("KINTSUGI_TEMPERATURE", "0.7");
+  const config = resolveConfig({} as any, {
+  env: process.env,
+  repoConfigPath: file,
+  homeConfigPath: undefined,
+  cwd: process.cwd(),
+  });
+  expect(config.providerSettings.temperature).toBe(0.7);
+  });
+
+  it("applies KINTSUGI_TOP_P override", () => {
+  const file = tempConfig(`provider: mock\n`);
+  vi.stubEnv("KINTSUGI_TOP_P", "0.9");
+  const config = resolveConfig({} as any, {
+  env: process.env,
+  repoConfigPath: file,
+  homeConfigPath: undefined,
+  cwd: process.cwd(),
+  });
+  expect(config.providerSettings.top_p).toBe(0.9);
+  });
+
+  it("applies KINTSUGI_STOP_SEQUENCES override", () => {
+  const file = tempConfig(`provider: mock\n`);
+  vi.stubEnv("KINTSUGI_STOP_SEQUENCES", "stop1, stop2");
+  const config = resolveConfig({} as any, {
+  env: process.env,
+  repoConfigPath: file,
+  homeConfigPath: undefined,
+  cwd: process.cwd(),
+  });
+  expect(config.providerSettings.stopSequences).toEqual(["stop1", "stop2"]);
+  });
+
+  it("applies KINTSUGI_PRESENCE_PENALTY override", () => {
+  const file = tempConfig(`provider: mock\n`);
+  vi.stubEnv("KINTSUGI_PRESENCE_PENALTY", "0.5");
+  const config = resolveConfig({} as any, {
+  env: process.env,
+  repoConfigPath: file,
+  homeConfigPath: undefined,
+  cwd: process.cwd(),
+  });
+  expect(config.providerSettings.presencePenalty).toBe(0.5);
+  });
+
+  it("applies KINTSUGI_FREQUENCY_PENALTY override", () => {
+  const file = tempConfig(`provider: mock\n`);
+  vi.stubEnv("KINTSUGI_FREQUENCY_PENALTY", "0.3");
+  const config = resolveConfig({} as any, {
+  env: process.env,
+  repoConfigPath: file,
+  homeConfigPath: undefined,
+  cwd: process.cwd(),
+  });
+  expect(config.providerSettings.frequencyPenalty).toBe(0.3);
+  });
+});
+
+describe("coverage: modelProfiles validation (L547-579)", () => {
+  it("throws when modelProfiles is not an object", () => {
+  const file = tempConfig(`provider: mock\nmodelProfiles: 42\n`);
+  expect(() => resolveConfig({} as any, makeOpts(file))).toThrow(/modelProfiles must be an object/);
+  });
+
+  it("throws when a modelProfile entry is not an object", () => {
+  const file = tempConfig(`provider: mock\nmodelProfiles:\n  bad: 42\n`);
+  expect(() => resolveConfig({} as any, makeOpts(file))).toThrow(/modelProfiles\.bad must be an object/);
+  });
+
+  it("throws when modelProfile has no provider or preset", () => {
+  const file = tempConfig(`provider: mock\nmodelProfiles:\n  noprov:\n    model: test-model\n`);
+  expect(() => resolveConfig({} as any, makeOpts(file))).toThrow(/provider or .*preset is required/);
+  });
+
+  it("throws when modelProfile has no model and no preset", () => {
+  const file = tempConfig(`provider: mock\nmodelProfiles:\n  nomod:\n    provider: mock\n`);
+  expect(() => resolveConfig({} as any, makeOpts(file))).toThrow(/model is required unless preset supplies/);
+  });
+
+  it("resolves modelProfile with provider and model", () => {
+  const file = tempConfig(`provider: mock\nmodelProfiles:\n  prof1:\n    provider: mock\n    model: test-model\n`);
+  const config = resolveConfig({} as any, makeOpts(file));
+  expect(config.modelProfiles).toBeDefined();
+  expect(config.modelProfiles!.prof1.model).toBe("test-model");
+  });
+});
+
+describe("coverage: modelConfig validation (L602-644)", () => {
+  it("throws when modelConfig.temperature is not a number", () => {
+  const file = tempConfig(`provider: mock\nmodelConfig:\n  temperature: hot\n`);
+  expect(() => resolveConfig({} as any, makeOpts(file))).toThrow(/modelConfig\.temperature must be a number/);
+  });
+
+  it("throws when modelConfig.reasoning_effort is invalid", () => {
+  const file = tempConfig(`provider: mock\nmodelConfig:\n  reasoning_effort: extreme\n`);
+  expect(() => resolveConfig({} as any, makeOpts(file))).toThrow(/reasoning_effort must be low, medium, or high/);
+  });
+
+  it("throws when modelConfig.maxTokens is not a number", () => {
+  const file = tempConfig(`provider: mock\nmodelConfig:\n  maxTokens: big\n`);
+  expect(() => resolveConfig({} as any, makeOpts(file))).toThrow(/modelConfig\.maxTokens must be a number/);
+  });
+
+  it("throws when modelConfig.stopSequences is not an array", () => {
+  const file = tempConfig(`provider: mock\nmodelConfig:\n  stopSequences: stop\n`);
+  expect(() => resolveConfig({} as any, makeOpts(file))).toThrow(/stopSequences must be an array/);
+  });
+});
+
+describe("coverage: providers and providerSettings validation (L686-705)", () => {
+  it("throws when providers entry is not an object", () => {
+  const file = tempConfig(`provider: mock\nproviders:\n  bad: 42\n`);
+  expect(() => resolveConfig({} as any, makeOpts(file))).toThrow(/providers\.bad must be an object/);
+  });
+});
+
+describe("coverage: optionalProviderSettings inside modelProfile (L732-735)", () => {
+  it("throws when modelProfile.settings.reasoning_effort is invalid", () => {
+  const file = tempConfig(`provider: mock\nmodelProfiles:\n  prof1:\n    provider: mock\n    model: test\n    settings:\n      reasoning_effort: extreme\n`);
+  expect(() => resolveConfig({} as any, makeOpts(file))).toThrow(/reasoning_effort must be low, medium, or high/);
+  });
+});
+
+function makeOpts(file: string) {
+  return {
+  env: {},
+  repoConfigPath: file,
+  homeConfigPath: undefined,
+  cwd: process.cwd(),
+  };
 }

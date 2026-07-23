@@ -1,13 +1,15 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync, chmodSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
-import { parse as parseYaml } from "yaml";
+import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { isProviderType, type ProviderType, type ModelConfig, type ModelProfileEntry, type ProviderPresetEntry } from "../providers/config.js";
 import { defaultPermissionConfig, type PermissionConfig, type PermissionDecision } from "../runtime/permissions.js";
 import type { ParsedArgs } from "../cli/args.js";
+import { type McpServerConfig } from "../protocol/mcp.js";
 
 export interface KintsugiConfig {
   provider?: ProviderType;
+  mcpServers?: Record<string, McpServerConfig>;
   model?: string;
   substrate?: string;
   noSubstrate?: boolean;
@@ -21,6 +23,7 @@ export interface KintsugiConfig {
   keyFile?: string;
   providers?: Record<string, ProviderSettings>;
   permissions?: Record<string, PermissionDecision>;
+  hooks?: HooksConfig;
   ui?: {
     theme?: string;
   };
@@ -39,6 +42,17 @@ export interface ProviderSettings {
   stopSequences?: string[];
   presencePenalty?: number;
   frequencyPenalty?: number;
+  rateLimit?: {
+    maxRequests: number;
+    windowMs: number;
+  };
+}
+
+export interface HooksConfig {
+  mode?: "strict" | "permissive";
+  timeoutMs?: number;
+  pre?: Record<string, string>;
+  post?: Record<string, string>;
 }
 
 export interface ResolvedConfig {
@@ -58,6 +72,13 @@ export interface ResolvedConfig {
   providers?: Record<string, ProviderSettings>;
   providerSettings: ProviderSettings;
   permissions: PermissionConfig;
+  mcpServers?: Record<string, McpServerConfig>;
+  hooks: {
+    mode: "strict" | "permissive";
+    timeoutMs: number;
+    pre: Record<string, string>;
+    post: Record<string, string>;
+  };
   sources: string[];
 }
 
@@ -173,6 +194,29 @@ export function resolveConfig(
     }
   }
 
+  // Read and parse .kintsugi/mcp.json relative to cwd if it exists
+  const cwd = options.cwd ?? process.cwd();
+  const mcpJsonPath = path.join(cwd, ".kintsugi", "mcp.json");
+  let mcpJsonServers: Record<string, McpServerConfig> | undefined;
+  if (existsSync(mcpJsonPath)) {
+    try {
+      const content = readFileSync(mcpJsonPath, "utf-8");
+      const parsed = JSON.parse(content);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        if (parsed.mcpServers !== undefined) {
+          mcpJsonServers = optionalMcpServers(parsed.mcpServers, mcpJsonPath);
+        }
+      }
+    } catch (err: any) {
+      throw new Error(`Failed to parse ${mcpJsonPath}: ${err.message}`);
+    }
+  }
+
+  const finalMcpServers = {
+    ...(merged.mcpServers ?? {}),
+    ...(mcpJsonServers ?? {}),
+  };
+
   return {
     provider,
     model,
@@ -190,6 +234,13 @@ export function resolveConfig(
     providers: expandProviderSettingsMap(merged.providers),
     providerSettings,
     permissions: resolvePermissions(merged.permissions),
+    mcpServers: Object.keys(finalMcpServers).length > 0 ? finalMcpServers : undefined,
+    hooks: {
+      mode: merged.hooks?.mode ?? "strict",
+      timeoutMs: merged.hooks?.timeoutMs ?? 5000,
+      pre: merged.hooks?.pre ?? {},
+      post: merged.hooks?.post ?? {},
+    },
     sources: loaded.sources,
   };
 }
@@ -427,6 +478,8 @@ function normalizeConfig(value: unknown, source: string): KintsugiConfig {
     keyFile: optionalString(raw.keyFile, "keyFile", source),
     providers: optionalProviders(raw.providers, source),
     permissions,
+    mcpServers: optionalMcpServers(raw.mcpServers, source),
+    hooks: optionalHooks(raw.hooks, source),
     ui: optionalUi(raw.ui, source),
   };
 }
@@ -451,6 +504,22 @@ function mergeConfig(base: KintsugiConfig, next: KintsugiConfig): KintsugiConfig
       ...(base.permissions ?? {}),
       ...(next.permissions ?? {}),
     },
+    mcpServers: base.mcpServers || next.mcpServers ? {
+      ...(base.mcpServers ?? {}),
+      ...(next.mcpServers ?? {}),
+    } : undefined,
+    hooks: base.hooks || next.hooks ? {
+      ...(base.hooks ?? {}),
+      ...(next.hooks ?? {}),
+      pre: {
+        ...(base.hooks?.pre ?? {}),
+        ...(next.hooks?.pre ?? {}),
+      },
+      post: {
+        ...(base.hooks?.post ?? {}),
+        ...(next.hooks?.post ?? {}),
+      },
+    } : undefined,
     ui: {
       ...(base.ui ?? {}),
       ...(next.ui ?? {}),
@@ -765,3 +834,267 @@ function optionalStringArray(value: unknown, name: string, source: string): stri
   }
   return value.map((s: unknown) => String(s));
 }
+
+function optionalHooks(value: unknown, source: string): HooksConfig | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`hooks must be an object: ${source}`);
+  }
+  const raw = value as Record<string, unknown>;
+  const mode = raw.mode;
+  if (mode !== undefined && mode !== "strict" && mode !== "permissive") {
+    throw new Error(`hooks.mode must be strict or permissive: ${source}`);
+  }
+  return {
+    mode: mode as "strict" | "permissive" | undefined,
+    timeoutMs: optionalNumber(raw.timeoutMs, "hooks.timeoutMs", source),
+    pre: optionalStringRecord(raw.pre, "hooks.pre", source),
+    post: optionalStringRecord(raw.post, "hooks.post", source),
+  };
+}
+
+function optionalStringRecord(
+  value: unknown,
+  name: string,
+  source: string
+): Record<string, string> | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${name} must be an object: ${source}`);
+  }
+  const record: Record<string, string> = {};
+  for (const [key, val] of Object.entries(value)) {
+    if (typeof val !== "string") {
+      throw new Error(`${name}.${key} must be a string: ${source}`);
+    }
+    record[key] = val;
+  }
+  return record;
+}
+
+// ----------------------------------------------------------------------------
+// Provider registration (wizard) support
+// ----------------------------------------------------------------------------
+
+/**
+ * Default directory for provider API-key files created by the registration
+ * wizard. Secrets live here (mode 0600), never directly in config.yaml.
+ */
+export const DEFAULT_PROVIDER_KEY_DIR = path.join(
+  homedir(),
+  ".config",
+  "kintsugi",
+  "keys"
+);
+
+export interface ProviderRegistration {
+  /** Preset name, e.g. "groq" or "crof". */
+  name: string;
+  /** Provider base URL, e.g. "https://api.groq.com/openai/v1". */
+  baseUrl: string;
+  /** API key — written to a key file, never stored in config.yaml. */
+  apiKey?: string;
+  /** Adapter type (default "openai-chat"). */
+  adapter?: string;
+  /** Default model id from the scan or manual entry. */
+  defaultModel?: string;
+}
+
+export interface ProviderWriteOptions {
+  /** Config file path (default DEFAULT_HOME_CONFIG_PATH). */
+  configPath?: string;
+  /** Directory for key files (default DEFAULT_PROVIDER_KEY_DIR). */
+  keyFileDir?: string;
+}
+
+export interface ProviderWriteResult {
+  configPath: string;
+  keyFilePath?: string;
+  backedUp: boolean;
+}
+
+function resolveWriteConfigPath(options?: ProviderWriteOptions): string {
+  return options?.configPath ?? DEFAULT_HOME_CONFIG_PATH;
+}
+
+function resolveKeyFileDir(options?: ProviderWriteOptions): string {
+  return options?.keyFileDir ?? DEFAULT_PROVIDER_KEY_DIR;
+}
+
+/** Read the raw (un-normalized) config YAML as a plain object. Returns {} when missing. */
+function readRawConfig(configPath: string): Record<string, unknown> {
+  if (!existsSync(configPath)) {
+    return {};
+  }
+  const parsed = parseYaml(readFileSync(configPath, "utf-8")) as unknown;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return {};
+  }
+  return parsed as Record<string, unknown>;
+}
+
+function backupConfig(configPath: string): boolean {
+  if (!existsSync(configPath)) {
+    return false;
+  }
+  copyFileSync(configPath, `${configPath}.bak`);
+  return true;
+}
+
+function writeRawConfig(configPath: string, config: Record<string, unknown>): void {
+  mkdirSync(path.dirname(configPath), { recursive: true });
+  writeFileSync(configPath, stringifyYaml(config), "utf-8");
+}
+
+function writeKeyFile(keyFileDir: string, name: string, apiKey: string): string {
+  mkdirSync(keyFileDir, { recursive: true });
+  const keyPath = path.join(keyFileDir, `${name}.key`);
+  writeFileSync(keyPath, `${apiKey.trim()}\n`, { encoding: "utf-8", mode: 0o600 });
+  try {
+    chmodSync(keyPath, 0o600);
+  } catch {
+    // chmod may fail on some platforms; the open mode already restricts access.
+  }
+  return keyPath;
+}
+
+/**
+ * Register a custom provider as a provider preset in config.yaml. The API key
+ * (if provided) is persisted to a key file and referenced via `keyFile`.
+ * Creates a `config.yaml.bak` backup before overwriting.
+ */
+export function addProviderToConfig(
+  registration: ProviderRegistration,
+  options?: ProviderWriteOptions
+): ProviderWriteResult {
+  const name = registration.name.trim();
+  if (!name) {
+    throw new Error("Provider name must not be empty.");
+  }
+  if (!registration.baseUrl.trim()) {
+    throw new Error("Provider base URL must not be empty.");
+  }
+
+  const configPath = resolveWriteConfigPath(options);
+  const keyFileDir = resolveKeyFileDir(options);
+
+  const config = readRawConfig(configPath);
+  const presets = (config.providerPresets as Record<string, unknown> | undefined) ?? {};
+  const entry: Record<string, unknown> = {
+    adapter: registration.adapter?.trim() || "openai-chat",
+    baseUrl: registration.baseUrl.trim(),
+  };
+
+  let keyFilePath: string | undefined;
+  if (registration.apiKey && registration.apiKey.trim()) {
+    keyFilePath = writeKeyFile(keyFileDir, name, registration.apiKey);
+    entry.keyFile = keyFilePath;
+  }
+  if (registration.defaultModel && registration.defaultModel.trim()) {
+    entry.defaultModel = registration.defaultModel.trim();
+  }
+
+  presets[name] = entry;
+  config.providerPresets = presets;
+
+  const backedUp = backupConfig(configPath);
+  writeRawConfig(configPath, config);
+  return { configPath, keyFilePath, backedUp };
+}
+
+/**
+ * Update the default model for a registered provider preset. Creates a
+ * `config.yaml.bak` backup before overwriting. Throws if the preset is missing.
+ */
+export function setProviderDefaultModel(
+  name: string,
+  model: string,
+  options?: ProviderWriteOptions
+): ProviderWriteResult {
+  const trimmedName = name.trim();
+  const trimmedModel = model.trim();
+  if (!trimmedName) {
+    throw new Error("Provider name must not be empty.");
+  }
+  if (!trimmedModel) {
+    throw new Error("Model must not be empty.");
+  }
+
+  const configPath = resolveWriteConfigPath(options);
+  const config = readRawConfig(configPath);
+  const presets = config.providerPresets as Record<string, unknown> | undefined;
+  if (!presets || !presets[trimmedName]) {
+    throw new Error(`Provider preset "${trimmedName}" is not registered.`);
+  }
+
+  const entry = presets[trimmedName];
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+    throw new Error(`Provider preset "${trimmedName}" is malformed.`);
+  }
+  (entry as Record<string, unknown>).defaultModel = trimmedModel;
+
+  const backedUp = backupConfig(configPath);
+  writeRawConfig(configPath, config);
+  return { configPath, backedUp };
+}
+
+/** Return the names of all registered custom provider presets in config.yaml. */
+export function listRegisteredProviders(options?: ProviderWriteOptions): string[] {
+  const configPath = resolveWriteConfigPath(options);
+  const config = readRawConfig(configPath);
+  const presets = config.providerPresets as Record<string, unknown> | undefined;
+  if (!presets || typeof presets !== "object") {
+    return [];
+  }
+  return Object.keys(presets).sort();
+}
+
+/** Whether a provider preset name is already registered. */
+export function isProviderRegistered(name: string, options?: ProviderWriteOptions): boolean {
+  return listRegisteredProviders(options).includes(name.trim());
+}
+
+function optionalMcpServers(
+  value: unknown,
+  source: string
+): Record<string, McpServerConfig> | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`mcpServers must be an object: ${source}`);
+  }
+
+  const servers: Record<string, McpServerConfig> = {};
+  for (const [name, entry] of Object.entries(value)) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      throw new Error(`mcpServers.${name} must be an object: ${source}`);
+    }
+    const raw = entry as Record<string, unknown>;
+    const command = requiredString(raw.command, `mcpServers.${name}.command`, source);
+    const args = optionalStringArray(raw.args, `mcpServers.${name}.args`, source);
+
+    let env: Record<string, string> | undefined;
+    if (raw.env !== undefined) {
+      if (!raw.env || typeof raw.env !== "object" || Array.isArray(raw.env)) {
+        throw new Error(`mcpServers.${name}.env must be an object: ${source}`);
+      }
+      env = {};
+      for (const [key, val] of Object.entries(raw.env)) {
+        env[key] = String(val);
+      }
+    }
+
+    servers[name] = {
+      command,
+      ...(args !== undefined ? { args } : {}),
+      ...(env !== undefined ? { env } : {}),
+    };
+  }
+  return servers;
+}
+

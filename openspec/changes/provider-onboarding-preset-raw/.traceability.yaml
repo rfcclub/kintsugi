@@ -1,0 +1,67 @@
+scenarios:
+  - scenario: wizard-shall-offer-three-onboarding-modes-mode-selector-displayed
+    status: passing
+  - scenario: wizard-shall-offer-three-onboarding-modes-default-to-import-mode
+    status: passing
+  - scenario: import-mode-shall-scan-providers-d-templates-scan-providers-d-directory
+    status: passing
+  - scenario: import-mode-shall-scan-providers-d-templates-parse-yaml-template-format
+    status: passing
+  - scenario: import-mode-shall-scan-providers-d-templates-handle-missing-providers-d-directory
+    status: passing
+  - scenario: import-mode-shall-scan-providers-d-templates-handle-empty-providers-d-directory
+    status: passing
+  - scenario: import-mode-shall-scan-providers-d-templates-handle-malformed-yaml-file
+    status: passing
+  - scenario: env-resolver-shall-resolve-apikey-references-resolve-from-process-env
+    status: passing
+  - scenario: env-resolver-shall-resolve-apikey-references-resolve-from-anima-env
+    status: passing
+  - scenario: env-resolver-shall-resolve-apikey-references-resolve-from-zshrc
+    status: passing
+  - scenario: env-resolver-shall-resolve-apikey-references-priority-order
+    status: passing
+  - scenario: env-resolver-shall-resolve-apikey-references-handle-default-value-pattern
+    status: passing
+  - scenario: env-resolver-shall-resolve-apikey-references-handle-literal-key
+    status: passing
+  - scenario: env-resolver-shall-resolve-apikey-references-handle-unresolved-variable
+    status: passing
+  - scenario: env-resolver-shall-resolve-apikey-references-handle-oauth-pattern
+    status: passing
+  - scenario: env-resolver-shall-resolve-apikey-references-parse-anima-env-format
+    status: passing
+  - scenario: env-resolver-shall-resolve-apikey-references-parse-zshrc-format
+    status: passing
+  - scenario: template-list-shall-show-key-status-key-status-indicators
+    status: passing
+  - scenario: template-list-shall-show-key-status-template-list-shows-provider-info
+    status: passing
+  - scenario: import-mode-shall-auto-fill-from-template-select-template-with-found-key
+    status: passing
+  - scenario: import-mode-shall-auto-fill-from-template-select-template-with-missing-key
+    status: passing
+  - scenario: import-mode-shall-auto-fill-from-template-select-template-with-oauth
+    status: passing
+  - scenario: import-mode-shall-auto-fill-from-template-select-template-with-unsupported-adapter
+    status: passing
+  - scenario: import-mode-shall-auto-fill-from-template-user-can-override-auto-filled-name
+    status: passing
+  - scenario: raw-mode-shall-collect-all-provider-details-manually-raw-mode-steps
+    status: passing
+  - scenario: raw-mode-shall-collect-all-provider-details-manually-protocol-selector
+    status: passing
+  - scenario: manual-model-entry-shall-accept-comma-separated-input-manual-model-entry
+    status: passing
+  - scenario: manual-model-entry-shall-accept-comma-separated-input-auto-scan-fallback
+    status: passing
+  - scenario: oauth-mode-shall-provide-browser-based-login-oauth-login-prompt
+    status: passing
+  - scenario: oauth-mode-shall-provide-browser-based-login-oauth-browser-flow-placeholder
+    status: passing
+  - scenario: oauth-mode-shall-provide-browser-based-login-oauth-manual-fallback
+    status: passing
+  - scenario: config-persistence-shall-reuse-existing-addprovidertoconfig-import-mode-saves-correctly
+    status: passing
+  - scenario: config-persistence-shall-reuse-existing-addprovidertoconfig-raw-mode-saves-correctly
+    status: passing

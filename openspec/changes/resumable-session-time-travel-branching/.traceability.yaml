@@ -1,0 +1,9 @@
+scenarios:
+  - scenario: jsonl-session-log-shall-be-truncatable-truncate-events-in-jsonl-file
+    status: passing
+  - scenario: kintsugi-runtime-shall-hydrate-state-from-truncated-history-re-hydrate-memory-on-rewind
+    status: passing
+  - scenario: workspace-state-shall-roll-back-using-git-integration-revert-workspace-file-edits
+    status: passing
+  - scenario: session-branching-shall-fork-the-timeline-fork-session
+    status: passing

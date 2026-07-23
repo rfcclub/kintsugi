@@ -1,0 +1,35 @@
+scenarios:
+  - scenario: show-provider-status-show-provider-status
+    status: passing
+  - scenario: open-provider-registration-wizard-open-provider-registration-wizard
+    status: passing
+  - scenario: wizard-shall-collect-provider-name-url-and-api-key-enter-provider-details-through-wizard-steps
+    status: passing
+  - scenario: wizard-shall-collect-provider-name-url-and-api-key-validate-provider-name
+    status: passing
+  - scenario: wizard-shall-collect-provider-name-url-and-api-key-validate-base-url-format
+    status: passing
+  - scenario: wizard-shall-collect-provider-name-url-and-api-key-api-key-input-masking
+    status: passing
+  - scenario: wizard-shall-test-connection-and-scan-models-connection-test-succeeds-models-found
+    status: passing
+  - scenario: wizard-shall-test-connection-and-scan-models-connection-test-fails
+    status: passing
+  - scenario: wizard-shall-test-connection-and-scan-models-model-scanning-fails-gracefully
+    status: passing
+  - scenario: wizard-shall-persist-configuration-save-provider-configuration
+    status: passing
+  - scenario: wizard-shall-persist-configuration-backup-existing-config
+    status: passing
+  - scenario: registered-providers-shall-appear-in-the-picker-custom-provider-in-picker
+    status: pending
+  - scenario: model-shall-display-cached-models-for-selection-model-list-shows-cached-models
+    status: passing
+  - scenario: model-shall-display-cached-models-for-selection-model-with-no-args-still-shows-profiles
+    status: passing
+  - scenario: model-shall-display-cached-models-for-selection-no-cached-models-shows-helpful-message
+    status: passing
+  - scenario: model-shall-display-cached-models-for-selection-model-selection-persists-to-config
+    status: passing
+  - scenario: wizard-shall-have-oauth-placeholder-oauth-option-is-displayed
+    status: passing

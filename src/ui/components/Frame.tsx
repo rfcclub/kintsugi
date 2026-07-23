@@ -4,22 +4,21 @@ import { Box, Text } from "ink";
 interface FrameProps {
   title: string;
   children: React.ReactNode;
-  showCandle?: boolean;
+  subtitle?: string;
+  accent?: string;
 }
 
-export function Frame({ title, children, showCandle = true }: FrameProps) {
+export function Frame({ title, children, subtitle, accent = "cyan" }: FrameProps) {
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor="yellow" paddingX={1}>
+    <Box flexDirection="column" borderStyle="round" borderColor={accent} paddingX={1}>
       <Box justifyContent="space-between">
-        <Text color="yellow">{title}</Text>
-        {showCandle ? (
-          <Text>
-            <Text color="yellow">╷</Text>
-            <Text color="gray">│</Text>
-          </Text>
-        ) : null}
+        <Box>
+          <Text color={accent} bold> {title}</Text>
+          {subtitle ? <Text color="gray"> {subtitle}</Text> : null}
+        </Box>
+        <Text color={accent}>kintsugi</Text>
       </Box>
-      <Box flexDirection="column">{children}</Box>
+      <Box flexDirection="column" marginTop={0}>{children}</Box>
     </Box>
   );
 }

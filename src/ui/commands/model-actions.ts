@@ -193,6 +193,7 @@ export function formatModelInspect(selection: ModelSelection): string {
     providerSettings: selection.providerSettings,
     modelConfig: selection.modelConfig,
     permissions: { rules: [], defaultDecision: "deny" },
+    hooks: { mode: "strict", timeoutMs: 5000, pre: {}, post: {} },
     sources: [],
   }).filter((issue) => issue.severity !== "info");
   if (doctorIssues.length > 0) {

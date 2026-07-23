@@ -55,7 +55,7 @@ export class BashTool implements Tool {
   }
 }
 
-function clampTimeout(timeoutMs?: number): number {
+export function clampTimeout(timeoutMs?: number): number {
   if (timeoutMs === undefined) {
     return DEFAULT_TIMEOUT_MS;
   }

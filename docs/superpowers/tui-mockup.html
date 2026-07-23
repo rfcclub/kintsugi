@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kintsugi TUI Polish — Interactive Mockup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-color: #0a0a0f;
+      --term-bg: #0d0d14;
+      --term-border: #1f1f2e;
+      --text-main: #e2e2e9;
+      --text-dim: #62627a;
+      --text-dimmer: #414155;
+      
+      /* Mode specific accents */
+      --accent-approve: #00f0ff;
+      --accent-approve-dim: rgba(0, 240, 255, 0.15);
+      --accent-auto: #39ff14;
+      --accent-auto-dim: rgba(57, 255, 20, 0.15);
+      --accent-plan: #ffd700;
+      --accent-plan-dim: rgba(255, 215, 0, 0.15);
+      
+      --accent-color: var(--accent-approve);
+      --accent-bg-dim: var(--accent-approve-dim);
+      
+      --user-color: #5d5dff;
+      --error-color: #ff3366;
+      --error-bg-dim: rgba(255, 51, 102, 0.1);
+      --thinking-color: #8b5cf6;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      font-family: 'JetBrains Mono', monospace;
+      padding: 40px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 30px;
+      max-width: 800px;
+    }
+
+    h1 {
+      font-size: 2.2rem;
+      font-weight: 700;
+      letter-spacing: -1px;
+      background: linear-gradient(135deg, #00f0ff, #8b5cf6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 10px;
+    }
+
+    header p {
+      color: var(--text-dim);
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+
+    .controls {
+      display: flex;
+      gap: 15px;
+      margin-bottom: 25px;
+      background: #12121a;
+      padding: 6px;
+      border-radius: 8px;
+      border: 1px solid var(--term-border);
+    }
+
+    .btn-mode {
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
+      padding: 8px 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .btn-mode:hover {
+      color: var(--text-main);
+    }
+
+    .btn-mode.active[data-mode="approve"] {
+      background: var(--accent-approve-dim);
+      color: var(--accent-approve);
+      border: 1px solid rgba(0, 240, 255, 0.3);
+    }
+
+    .btn-mode.active[data-mode="auto"] {
+      background: var(--accent-auto-dim);
+      color: var(--accent-auto);
+      border: 1px solid rgba(57, 255, 20, 0.3);
+    }
+
+    .btn-mode.active[data-mode="plan"] {
+      background: var(--accent-plan-dim);
+      color: var(--accent-plan);
+      border: 1px solid rgba(255, 215, 0, 0.3);
+    }
+
+    /* Terminal Container */
+    .terminal-container {
+      width: 100%;
+      max-width: 900px;
+      background-color: var(--term-bg);
+      border-radius: 12px;
+      border: 1px solid var(--term-border);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 40px rgba(139, 92, 246, 0.05);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    /* Window Chrome */
+    .terminal-window-bar {
+      height: 38px;
+      background-color: #12121a;
+      border-bottom: 1px solid var(--term-border);
+      display: flex;
+      align-items: center;
+      padding: 0 15px;
+      justify-content: space-between;
+    }
+
+    .window-dots {
+      display: flex;
+      gap: 8px;
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .dot.red { background-color: #ff5f56; }
+    .dot.yellow { background-color: #ffbd2e; }
+    .dot.green { background-color: #27c93f; }
+
+    .window-title {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      font-weight: 500;
+    }
+
+    .window-size {
+      width: 52px;
+      text-align: right;
+      font-size: 0.75rem;
+      color: var(--text-dimmer);
+    }
+
+    /* TUI Header Bar */
+    .tui-header {
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.85rem;
+      border-bottom: 1px dashed var(--term-border);
+      transition: all 0.3s ease;
+    }
+
+    .tui-header-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tui-header-right {
+      text-transform: uppercase;
+      font-weight: bold;
+      font-size: 0.8rem;
+      padding: 2px 6px;
+      border-radius: 3px;
+      border: 1px solid transparent;
+      transition: all 0.3s ease;
+    }
+
+    /* Transcript Area */
+    .tui-transcript {
+      padding: 16px 20px;
+      height: 480px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    /* Message Bubbles */
+    .msg-user {
+      color: var(--user-color);
+      font-weight: bold;
+      display: flex;
+      gap: 4px;
+    }
+
+    .msg-assistant {
+      color: var(--text-main);
+      padding-left: 16px;
+      white-space: pre-wrap;
+    }
+
+    .msg-thinking {
+      color: var(--text-dim);
+      font-style: italic;
+      padding-left: 16px;
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+    }
+    
+    .msg-thinking .icon {
+      color: var(--thinking-color);
+      font-weight: bold;
+      font-style: normal;
+    }
+
+    /* Tool Call Card */
+    .tool-card {
+      margin-left: 16px;
+      border-radius: 4px;
+      border: 1px solid var(--accent-color);
+      max-width: 90%;
+      background: rgba(13, 13, 20, 0.4);
+      overflow: hidden;
+      transition: border-color 0.3s ease;
+    }
+
+    .tool-header {
+      background: rgba(255, 255, 255, 0.02);
+      padding: 6px 12px;
+      border-bottom: 1px solid var(--term-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .tool-title {
+      color: var(--accent-color);
+      font-weight: bold;
+      font-size: 0.85rem;
+      transition: color 0.3s ease;
+    }
+
+    .tool-state {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+    }
+
+    .tool-body {
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .tool-args {
+      color: var(--text-dim);
+      font-size: 0.85rem;
+    }
+
+    .tool-result-sep {
+      border-top: 1px dashed var(--term-border);
+      margin: 4px 0;
+    }
+
+    .tool-result {
+      color: var(--text-main);
+      font-size: 0.85rem;
+      white-space: pre-wrap;
+    }
+
+    /* Permission Prompt */
+    .permission-prompt {
+      margin-left: 16px;
+      border: 1px solid var(--accent-color);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.01);
+      max-width: 80%;
+      overflow: hidden;
+      animation: pulseBorder 2s infinite alternate;
+      transition: border-color 0.3s ease;
+    }
+
+    @keyframes pulseBorder {
+      0% { box-shadow: 0 0 4px rgba(0, 240, 255, 0.1); }
+      100% { box-shadow: 0 0 15px rgba(0, 240, 255, 0.3); }
+    }
+
+    .permission-header {
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--term-border);
+      font-weight: bold;
+      color: var(--text-main);
+      font-size: 0.85rem;
+    }
+
+    .permission-header span {
+      color: var(--accent-color);
+      transition: color 0.3s ease;
+    }
+
+    .permission-body {
+      padding: 12px 14px;
+    }
+
+    .permission-command {
+      color: var(--text-dim);
+      font-size: 0.85rem;
+      background: #08080c;
+      padding: 8px;
+      border-radius: 4px;
+      border: 1px solid #141420;
+      margin-bottom: 12px;
+      overflow-x: auto;
+    }
+
+    .permission-actions {
+      display: flex;
+      gap: 15px;
+      font-size: 0.85rem;
+    }
+
+    .action-yes { color: var(--accent-auto); font-weight: bold; cursor: pointer; }
+    .action-no { color: var(--error-color); font-weight: bold; cursor: pointer; }
+    .action-always { color: var(--accent-plan); font-weight: bold; cursor: pointer; }
+
+    .action-btn {
+      padding: 2px 6px;
+      border-radius: 3px;
+      transition: background 0.2s ease;
+    }
+
+    .action-btn:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .action-btn span {
+      color: var(--text-dim);
+      font-weight: normal;
+    }
+
+    /* Composer Area */
+    .tui-composer {
+      padding: 12px 20px;
+      border-top: 1px solid var(--term-border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #09090e;
+    }
+
+    .composer-prompt {
+      color: var(--accent-color);
+      font-weight: bold;
+      font-size: 0.95rem;
+      transition: color 0.3s ease;
+    }
+
+    .composer-input {
+      flex-grow: 1;
+      background: transparent;
+      border: none;
+      color: var(--text-main);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.9rem;
+      outline: none;
+    }
+
+    .composer-input::placeholder {
+      color: var(--text-dimmer);
+    }
+
+    .composer-cursor {
+      width: 8px;
+      height: 15px;
+      background-color: var(--accent-color);
+      display: inline-block;
+      animation: blink 1s infinite;
+      transition: background-color 0.3s ease;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+
+    /* Status Bar */
+    .tui-statusbar {
+      padding: 8px 20px;
+      border-top: 1px solid var(--term-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      background: #08080c;
+    }
+
+    .status-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-mode {
+      color: #ff007f; /* magenta accent */
+      font-weight: bold;
+    }
+
+    .status-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-dot {
+      color: var(--text-dimmer);
+    }
+
+    .status-ready {
+      color: var(--text-dim);
+    }
+
+    .status-ready.active {
+      color: var(--accent-auto);
+      font-weight: bold;
+    }
+
+    /* Interactive overlay simulation */
+    .welcome-card {
+      margin-top: 10px;
+      padding-left: 8px;
+      border-left: 2px solid var(--text-dimmer);
+      color: var(--text-dim);
+      font-size: 0.85rem;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>KINTSUGI TUI POLISH</h1>
+    <p>Premium visual design specs featuring custom themes, micro-animations, and clean ASCII structures. Perfected for agent runtimes and triaged environments.</p>
+  </header>
+
+  <div class="controls">
+    <button class="btn-mode active" data-mode="approve">Approve Mode</button>
+    <button class="btn-mode" data-mode="auto">Auto Mode</button>
+    <button class="btn-mode" data-mode="plan">Plan Mode</button>
+  </div>
+
+  <div class="terminal-container">
+    <!-- macOS Window Chrome -->
+    <div class="terminal-window-bar">
+      <div class="window-dots">
+        <div class="dot red"></div>
+        <div class="dot yellow"></div>
+        <div class="dot green"></div>
+      </div>
+      <div class="window-title">kintsugi -- interactive terminal runtime</div>
+      <div class="window-size">80x24</div>
+    </div>
+
+    <!-- TUI Header Bar -->
+    <div class="tui-header" id="tui-header">
+      <div class="tui-header-left">
+        <span style="color: var(--accent-color); font-weight: bold; transition: color 0.3s ease;">kintsugi</span>
+        <span style="color: var(--text-dimmer)">.</span>
+        <span style="color: var(--text-dim)">crof-deep/deepseek-v4-flash</span>
+        <span style="color: var(--text-dimmer)">.</span>
+        <span style="color: var(--text-dimmer)" id="header-mode-text">approve</span>
+      </div>
+      <div class="tui-header-right" id="header-badge" style="color: var(--accent-color); border-color: var(--accent-color); background-color: var(--accent-bg-dim)">
+        APPROVE
+      </div>
+    </div>
+
+    <!-- TUI Transcript Area -->
+    <div class="tui-transcript" id="tui-transcript">
+      <!-- Welcome State -->
+      <div class="welcome-card">
+        <div>Welcome to kintsugi.</div>
+        <div>Type a message or /help to get started.</div>
+        <div>  Shift+Tab: switch modes  |  Esc: stop  |  Ctrl-C: exit</div>
+      </div>
+
+      <!-- User Message -->
+      <div class="msg-user">
+        <span>&nbsp;&nbsp;&gt;&nbsp;</span>read the config file
+      </div>
+
+      <!-- Thinking -->
+      <div class="msg-thinking">
+        <span class="icon">~</span>
+        <span>Analyzing repository files & checking for config.yaml...</span>
+      </div>
+
+      <!-- Tool Call Card -->
+      <div class="tool-card" id="tool-card-config">
+        <div class="tool-header">
+          <span class="tool-title" id="tool-title-1">read_file</span>
+          <span class="tool-state">success</span>
+        </div>
+        <div class="tool-body">
+          <div class="tool-args">TargetFile: "/Users/thoor/repo/kintsugi/config.yaml"</div>
+          <div class="tool-result-sep"></div>
+          <div class="tool-result">provider: mock
+model: gpt-4.1-mini
+permissions:
+  read_file: allow
+  write_file: ask
+  bash: ask</div>
+        </div>
+      </div>
+
+      <!-- Assistant Message -->
+      <div class="msg-assistant">I've inspected the config file. It is currently configured with the mock provider and gpt-4.1-mini model profile. The permissions are set to automatically allow file reading, but require approval for writing files or executing terminal shell commands.</div>
+
+      <!-- User Message -->
+      <div class="msg-user">
+        <span>&nbsp;&nbsp;&gt;&nbsp;</span>run tests to verify conformance
+      </div>
+
+      <!-- Permission Prompt -->
+      <div class="permission-prompt" id="bash-permission-prompt">
+        <div class="permission-header">
+          <span>Allow:</span> bash
+        </div>
+        <div class="permission-body">
+          <div class="permission-command">npm test</div>
+          <div class="permission-actions">
+            <span class="action-btn action-yes" onclick="resolvePrompt('y')">[y]<span>es</span></span>
+            <span class="action-btn action-no" onclick="resolvePrompt('n')">[n]<span>o</span></span>
+            <span class="action-btn action-always" onclick="resolvePrompt('a')">[a]<span>lways</span></span>
+          </div>
+        </div>
+      </div>
+      
+    </div>
+
+    <!-- TUI Composer Input -->
+    <div class="tui-composer">
+      <span class="composer-prompt" id="composer-prompt">&gt;&nbsp;</span>
+      <input type="text" class="composer-input" id="terminal-input" placeholder="type a message or /help" autocomplete="off" />
+      <span class="composer-cursor" id="composer-cursor"></span>
+    </div>
+
+    <!-- TUI Status Bar -->
+    <div class="tui-statusbar">
+      <div class="status-left">
+        <span class="status-mode" id="status-mode-label">APPROVE</span>
+        <span class="status-dot">.</span>
+        <span>crof-deep</span>
+        <span class="status-dot">.</span>
+        <span id="msg-count">4 msgs</span>
+        <span class="status-dot">.</span>
+        <span class="status-ready active" id="status-spinner">ready</span>
+      </div>
+      <div class="status-right">
+        <span>Shift+Tab</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const buttons = document.querySelectorAll('.btn-mode');
+    const termContainer = document.querySelector('.terminal-container');
+    const headerBadge = document.getElementById('header-badge');
+    const headerModeText = document.getElementById('header-mode-text');
+    const statusBarMode = document.getElementById('status-mode-label');
+    const composerPrompt = document.getElementById('composer-prompt');
+    const toolTitle1 = document.getElementById('tool-title-1');
+    const terminalInput = document.getElementById('terminal-input');
+    const tuiTranscript = document.getElementById('tui-transcript');
+    const msgCountLabel = document.getElementById('msg-count');
+    const statusSpinner = document.getElementById('status-spinner');
+    
+    let currentMode = 'approve';
+    let messageCount = 4;
+
+    function applyMode(mode) {
+      currentMode = mode;
+      
+      // Update variables
+      if (mode === 'approve') {
+        document.documentElement.style.setProperty('--accent-color', 'var(--accent-approve)');
+        document.documentElement.style.setProperty('--accent-bg-dim', 'var(--accent-approve-dim)');
+        headerBadge.innerText = 'APPROVE';
+        headerModeText.innerText = 'approve';
+        statusBarMode.innerText = 'APPROVE';
+        statusBarMode.style.color = '#00f0ff';
+        document.getElementById('bash-permission-prompt').style.display = 'block';
+      } else if (mode === 'auto') {
+        document.documentElement.style.setProperty('--accent-color', 'var(--accent-auto)');
+        document.documentElement.style.setProperty('--accent-bg-dim', 'var(--accent-auto-dim)');
+        headerBadge.innerText = 'AUTO';
+        headerModeText.innerText = 'auto';
+        statusBarMode.innerText = 'AUTO';
+        statusBarMode.style.color = '#39ff14';
+        document.getElementById('bash-permission-prompt').style.display = 'none';
+      } else if (mode === 'plan') {
+        document.documentElement.style.setProperty('--accent-color', 'var(--accent-plan)');
+        document.documentElement.style.setProperty('--accent-bg-dim', 'var(--accent-plan-dim)');
+        headerBadge.innerText = 'PLAN';
+        headerModeText.innerText = 'plan';
+        statusBarMode.innerText = 'PLAN';
+        statusBarMode.style.color = '#ffd700';
+        document.getElementById('bash-permission-prompt').style.display = 'block';
+      }
+
+      // Sync active button class
+      buttons.forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.getAttribute('data-mode') === mode) {
+          btn.classList.add('active');
+        }
+      });
+    }
+
+    buttons.forEach(button => {
+      button.addEventListener('click', () => {
+        applyMode(button.getAttribute('data-mode'));
+      });
+    });
+
+    // Handle shift+tab key emulation in terminal input
+    terminalInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Tab' && e.shiftKey) {
+        e.preventDefault();
+        const modes = ['approve', 'auto', 'plan'];
+        const nextIdx = (modes.indexOf(currentMode) + 1) % modes.length;
+        applyMode(modes[nextIdx]);
+      }
+      
+      if (e.key === 'Enter' && terminalInput.value.trim()) {
+        const text = terminalInput.value.trim();
+        terminalInput.value = '';
+        
+        // Append user prompt
+        messageCount++;
+        msgCountLabel.innerText = `${messageCount} msgs`;
+        
+        const userDiv = document.createElement('div');
+        userDiv.className = 'msg-user';
+        userDiv.innerHTML = `<span>&nbsp;&nbsp;&gt;&nbsp;</span>${text}`;
+        tuiTranscript.appendChild(userDiv);
+        
+        // Auto scroll
+        tuiTranscript.scrollTop = tuiTranscript.scrollHeight;
+        
+        // Simulate response streaming
+        simulateResponse(text);
+      }
+    });
+
+    function resolvePrompt(action) {
+      const prompt = document.getElementById('bash-permission-prompt');
+      if (!prompt) return;
+      
+      const successDiv = document.createElement('div');
+      successDiv.className = 'msg-thinking';
+      successDiv.style.color = 'var(--accent-auto)';
+      
+      if (action === 'y') {
+        successDiv.innerHTML = `<span class="icon" style="color: var(--accent-auto)">✓</span> <span>Permission granted. Running tests...</span>`;
+      } else if (action === 'n') {
+        successDiv.innerHTML = `<span class="icon" style="color: var(--error-color)">✗</span> <span>Permission denied. Terminating turn...</span>`;
+      } else {
+        successDiv.innerHTML = `<span class="icon" style="color: var(--accent-plan)">★</span> <span>Session-wide permission saved. Executing...</span>`;
+      }
+      
+      prompt.parentNode.replaceChild(successDiv, prompt);
+      
+      // If approved, show mock test run
+      if (action === 'y' || action === 'a') {
+        setTimeout(() => {
+          const testCard = document.createElement('div');
+          testCard.className = 'tool-card';
+          testCard.innerHTML = `
+            <div class="tool-header">
+              <span class="tool-title" style="color: var(--accent-color)">bash</span>
+              <span class="tool-state">success</span>
+            </div>
+            <div class="tool-body">
+              <div class="tool-args">command: "npm test"</div>
+              <div class="tool-result-sep"></div>
+              <div class="tool-result" style="color: #39ff14">✓ [conformance] Provider conformance checks succeeded
+✓ [memory] reconstruct events from jsonl event log
+✓ [permissions] deny-all triggers decider prompt
+
+Test Suites: 8 passed, 8 total
+Tests:       215 passed, 215 total
+Snapshots:   0 total
+Time:        1.42 s</div>
+            </div>
+          `;
+          tuiTranscript.appendChild(testCard);
+          tuiTranscript.scrollTop = tuiTranscript.scrollHeight;
+          
+          setTimeout(() => {
+            const assistantDiv = document.createElement('div');
+            assistantDiv.className = 'msg-assistant';
+            assistantDiv.innerText = "All 215 integration and conformance tests have passed cleanly! The runtime has verified itself and is ready for further orchestration.";
+            tuiTranscript.appendChild(assistantDiv);
+            tuiTranscript.scrollTop = tuiTranscript.scrollHeight;
+          }, 800);
+        }, 1000);
+      }
+    }
+
+    function simulateResponse(query) {
+      statusSpinner.innerText = 'thinking';
+      statusSpinner.className = 'status-ready';
+      statusSpinner.style.color = 'var(--thinking-color)';
+      
+      setTimeout(() => {
+        // Thinking indicator
+        const thinkDiv = document.createElement('div');
+        thinkDiv.className = 'msg-thinking';
+        thinkDiv.innerHTML = `<span class="icon">~</span> <span id="streaming-thinking">Synthesizing plan...</span>`;
+        tuiTranscript.appendChild(thinkDiv);
+        tuiTranscript.scrollTop = tuiTranscript.scrollHeight;
+        
+        setTimeout(() => {
+          document.getElementById('streaming-thinking').innerText = 'Generating reply...';
+          statusSpinner.innerText = 'streaming';
+          statusSpinner.style.color = 'var(--accent-color)';
+          
+          const assistantDiv = document.createElement('div');
+          assistantDiv.className = 'msg-assistant';
+          tuiTranscript.appendChild(assistantDiv);
+          
+          const words = `Sure! I am in ${currentMode} mode right now, ready to assist. Since you typed: "${query}", how can we expand our capabilities today? Let's write some high-performance code!`.split(' ');
+          let idx = 0;
+          
+          const interval = setInterval(() => {
+            if (idx < words.length) {
+              assistantDiv.innerText += (idx === 0 ? '' : ' ') + words[idx];
+              tuiTranscript.scrollTop = tuiTranscript.scrollHeight;
+              idx++;
+            } else {
+              clearInterval(interval);
+              statusSpinner.innerText = 'ready';
+              statusSpinner.className = 'status-ready active';
+              statusSpinner.style.color = '';
+            }
+          }, 80);
+          
+        }, 1200);
+      }, 600);
+    }
+  </script>
+
+</body>
+</html>

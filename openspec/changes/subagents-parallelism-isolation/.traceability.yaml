@@ -1,0 +1,9 @@
+scenarios:
+  - scenario: subagents-shall-run-with-isolated-history-pools-subagent-execution-does-not-leak-to-main-history
+    status: passing
+  - scenario: subagents-shall-respect-permission-constraints-read-only-subagent-cannot-write-files
+    status: passing
+  - scenario: parent-child-agents-shall-communicate-via-message-passing-message-routing
+    status: passing
+  - scenario: depth-and-concurrency-limits-shall-prevent-token-runaway-block-recursive-agent-spawning
+    status: passing

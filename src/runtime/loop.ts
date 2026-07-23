@@ -5,6 +5,8 @@ import type { PermissionDecision } from "./permissions.js";
 import { assemblePrompt, type PromptConfig } from "./prompt.js";
 import type { KintsugiRuntime } from "./session.js";
 import { getToolMessageFormatter } from "../providers/registry.js";
+import { resolveHook, runHookProcess } from "./hooks.js";
+import { globalRateLimiter } from "./rate-limiter.js";
 
 export async function* runTurn(
   runtime: KintsugiRuntime,
@@ -23,16 +25,39 @@ export async function* runTurn(
 
   // --- Initial prompt assembly ---
   const prompt = assemblePrompt(runtime, trimmed, promptConfig ?? runtime.promptConfig);
+  runtime.messageCount = (runtime.messageCount ?? 0) + 1;
   const userMessage = runtimeMessage("user", trimmed);
   runtime.prompts.push(userMessage);
-  runtime.messageCount = (runtime.messageCount ?? 0) + 1;
+  const turnIndex = runtime.prompts.filter((m) => m.role === "user").length;
+  if (runtime.sessionWriter) {
+    runtime.sessionWriter.currentTurn = turnIndex;
+  }
   runtime.sessionWriter?.message(userMessage);
 
   // --- First turn ---
   let baseMessages: ProviderMessage[] = prompt.messages;
   const toolSpecs = runtime.toolRegistry?.allSpecs();
 
-  yield* runTurnLoop(runtime, provider, baseMessages, toolSpecs, options);
+  try {
+    yield* runTurnLoop(runtime, provider, baseMessages, toolSpecs, options);
+  } finally {
+    if (runtime.workspace) {
+      const workspace = runtime.workspace;
+      try {
+        const { isGitActive, createGitSnapshot } = await import("./git-rollback.js");
+        const { updateGitHashInSessionLog } = await import("../store/sessions.js");
+        if (isGitActive(workspace)) {
+          const hash = createGitSnapshot(turnIndex, workspace);
+          if (hash && runtime.sessionWriter) {
+            runtime.sessionWriter.currentGitHash = hash;
+            updateGitHashInSessionLog(runtime.sessionWriter.filePath, turnIndex, hash);
+          }
+        }
+      } catch (err) {
+        console.error("Git snapshot error:", err);
+      }
+    }
+  }
 }
 
 /**
@@ -86,6 +111,11 @@ async function* runTurnLoop(
     const roundToolCalls: ToolCall[] = [];
     const roundToolResults: ToolResult[] = [];
     let hadFailure = false;
+
+    // Rate limit per provider (sliding window)
+    const providerId = runtime.providerPreset ?? "default";
+    const rateLimitConfig = runtime.config?.providers?.[providerId]?.rateLimit;
+    await globalRateLimiter.acquire(providerId, rateLimitConfig);
 
     for await (const event of provider.streamTurn(request)) {
       if (isAborted()) {
@@ -239,9 +269,42 @@ async function executeToolRequest(
   event: Extract<RuntimeEvent, { type: "tool.requested" }>,
   signal?: AbortSignal
 ): Promise<Extract<RuntimeEvent, { type: "tool.completed" }>> {
+  if (runtime.allowedTools && !runtime.allowedTools.includes(event.name)) {
+    return { type: "tool.completed", id: event.id, output: "Permission denied" };
+  }
+
   const tool = runtime.toolRegistry?.lookup(event.name);
   if (!tool) {
     return { type: "tool.completed", id: event.id, output: `Unknown tool: ${event.name}` };
+  }
+
+  let toolArgs = event.args;
+
+  // === 1. PRE-TOOL LIFECYCLE HOOKS ===
+  const preHook = await resolveHook(runtime, "pre", event.name);
+  if (preHook) {
+    const preResult = await runHookProcess(preHook, {
+      event: "pre",
+      tool: event.name,
+      id: event.id,
+      arguments: toolArgs as Record<string, any>,
+      context: {
+        workspace: runtime.workspace ?? process.cwd(),
+        model: runtime.model ?? "unknown",
+        messageCount: runtime.messageCount ?? 0,
+      }
+    }, signal);
+
+    if (preResult.status === "deny") {
+      return {
+        type: "tool.completed",
+        id: event.id,
+        output: `Hook Aborted: ${preResult.error ?? "Rejected by PreToolUse hook."}`
+      };
+    }
+    if (preResult.args) {
+      toolArgs = preResult.args;
+    }
   }
 
   let decision = runtime.sessionPermissions?.[event.name] ??
@@ -250,7 +313,7 @@ async function executeToolRequest(
 
   if (decision === "ask") {
     decision = runtime.permissionDecider
-      ? await runtime.permissionDecider(event.name, event.args, signal)
+      ? await runtime.permissionDecider(event.name, toolArgs, signal)
       : "deny";
   }
 
@@ -261,7 +324,7 @@ async function executeToolRequest(
   runtime.sessionWriter?.toolCall({
     toolCallId: event.id,
     toolName: event.name,
-    args: event.args,
+    args: toolArgs,
     decision,
   });
 
@@ -269,18 +332,47 @@ async function executeToolRequest(
     return { type: "tool.completed", id: event.id, output: "Permission denied" };
   }
 
-  const args = normalizeToolArgs(event.args, event.id);
-  const result = await tool.execute(args, {
+  const args = normalizeToolArgs(toolArgs, event.id);
+  let result = await tool.execute(args, {
     workingDir: process.cwd(),
     workspaceRoots: runtime.workspaceRoots?.length ? runtime.workspaceRoots : [process.cwd()],
     permission: decision as PermissionDecision,
     signal,
+    runtime,
   });
+
+  let output = result.output;
+  let isError = result.isError;
+
+  // === 2. POST-TOOL LIFECYCLE HOOKS ===
+  const postHook = await resolveHook(runtime, "post", event.name);
+  if (postHook) {
+    const postResult = await runHookProcess(postHook, {
+      event: "post",
+      tool: event.name,
+      id: event.id,
+      arguments: toolArgs as Record<string, any>,
+      context: {
+        workspace: runtime.workspace ?? process.cwd(),
+        model: runtime.model ?? "unknown",
+        messageCount: runtime.messageCount ?? 0,
+      },
+      output,
+      isError,
+    }, signal);
+
+    if (postResult.status === "deny") {
+      isError = true;
+      output = `Hook Verification Failed: ${postResult.error ?? "Rejected by PostToolUse hook."}`;
+    } else if (postResult.output !== undefined) {
+      output = postResult.output;
+    }
+  }
 
   return {
     type: "tool.completed",
     id: event.id,
-    output: result.isError ? `Error: ${result.output}` : result.output,
+    output: isError ? `Error: ${output}` : output,
   };
 }
 

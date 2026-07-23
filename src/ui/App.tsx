@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { bootRuntime, renderBoot, type KintsugiRuntime } from "../runtime/runtime.js";
 import type { Provider } from "../providers/provider.js";
 import type { ParsedArgs } from "../cli/args.js";
+import { McpClient } from "../protocol/mcp.js";
 import { SessionIndex } from "../store/index.js";
 import { replaySession } from "../store/replay.js";
 import { SessionWriter } from "../store/sessions.js";
@@ -116,6 +117,48 @@ export function App({ args, config, provider: initialProvider, showPicker }: App
 function RuntimeApp({ args, config, provider: initialProvider, showPicker }: AppProps) {
   const runtime = useRuntime(args, config);
   const [provider, setProvider] = useState<Provider | undefined>(initialProvider);
+
+  const hasMcpServers = config.mcpServers && Object.keys(config.mcpServers).length > 0;
+  const [mcpInitialized, setMcpInitialized] = useState(!hasMcpServers);
+
+  useEffect(() => {
+    if (!hasMcpServers) {
+      return;
+    }
+
+    const clients: McpClient[] = [];
+
+    async function initMcp() {
+      try {
+        const servers = config.mcpServers!;
+        for (const [name, serverConfig] of Object.entries(servers)) {
+          const client = new McpClient(name, serverConfig);
+          clients.push(client);
+          client.start();
+          const tools = await client.getTools();
+          for (const tool of tools) {
+            runtime.toolRegistry?.register(tool);
+          }
+        }
+      } catch (error) {
+        // ignore
+      } finally {
+        setMcpInitialized(true);
+      }
+    }
+
+    initMcp();
+
+    return () => {
+      for (const client of clients) {
+        client.stop().catch(() => {});
+      }
+    };
+  }, [config.mcpServers, runtime]);
+
+  if (!mcpInitialized) {
+    return <HelpView lines={["Initializing MCP servers..."]} />;
+  }
 
   if (args.command === "echo") {
     return <EchoView runtime={runtime} print={args.print} summary={args.summary} />;

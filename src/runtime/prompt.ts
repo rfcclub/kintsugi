@@ -95,7 +95,7 @@ export function assemblePrompt(
   config: PromptConfig = {}
 ): AssembledPrompt {
   const layers: PromptLayer[] = [
-    makeLayer("base", "system", BASE_INSTRUCTIONS, false),
+    makeLayer("base", "system", runtime.systemInstructions ?? BASE_INSTRUCTIONS, false),
   ];
 
   if (runtime.substrate) {
@@ -107,6 +107,31 @@ export function assemblePrompt(
         config.echoBudget ?? DEFAULT_ECHO_BUDGET
       )
     );
+  }
+
+  const pluginsDir = path.join(os.homedir(), ".config", "kintsugi", "plugins");
+  if (fs.existsSync(pluginsDir)) {
+    try {
+      const entries = fs.readdirSync(pluginsDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isDirectory() || entry.isSymbolicLink()) {
+          const pluginPath = path.join(pluginsDir, entry.name);
+          const pluginContent = readPluginContent(pluginPath);
+          if (pluginContent) {
+            layers.push(
+              makeBoundedLayer(
+                `plugin:${entry.name}`,
+                "system",
+                pluginContent,
+                32 * 1024
+              )
+            );
+          }
+        }
+      }
+    } catch {
+      // Ignore
+    }
   }
 
   const workspaceContent = readWorkspaceContext(config.workspacePath);
@@ -440,4 +465,30 @@ function sliceBytes(content: string, bytes: number): string {
 
 function byteLength(content: string): number {
   return Buffer.byteLength(content, "utf-8");
+}
+
+function readPluginContent(pluginPath: string): string {
+  const mdFiles: string[] = [];
+  const findMd = (dir: string) => {
+    if (!fs.existsSync(dir)) return;
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory() && entry.name !== "node_modules" && entry.name !== ".git") {
+        findMd(fullPath);
+      } else if (entry.isFile() && entry.name.endsWith(".md")) {
+        mdFiles.push(fullPath);
+      }
+    }
+  };
+  findMd(pluginPath);
+
+  return mdFiles
+    .map((filePath) => {
+      const relPath = path.relative(pluginPath, filePath);
+      const content = fs.readFileSync(filePath, "utf-8").trim();
+      return [`# Plugin Skill: ${relPath}`, "", content].join("\n");
+    })
+    .join("\n\n---\n\n")
+    .trim();
 }

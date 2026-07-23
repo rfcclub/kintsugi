@@ -28,6 +28,15 @@ export interface KintsugiRuntime {
   minorMemory?: import("../memory/minor.js").MinorMemory;
   messageCount?: number;
   totalTokens?: number;
+  config?: import("../config/config.js").ResolvedConfig;
+  workspace?: string;
+  systemInstructions?: string;
+  allowedTools?: string[];
+  subagentDepth?: number;
+  subagentManager?: import("./subagents.js").SubagentManager;
+  parentId?: string;
+  incomingMessages?: any[];
+  messageHandler?: (msg: any) => Promise<void> | void;
 }
 
 export interface LoadedSubstrate {
@@ -52,6 +61,10 @@ export interface RuntimeOptions {
   opsLog?: import("../memory/ops-store.js").OpsLog;
   memory?: import("../memory/memory.js").KintsugiMemory;
   minorMemory?: import("../memory/minor.js").MinorMemory;
+  systemInstructions?: string;
+  allowedTools?: string[];
+  subagentManager?: import("./subagents.js").SubagentManager;
+  subagentDepth?: number;
 }
 
 export interface PromptConfig {

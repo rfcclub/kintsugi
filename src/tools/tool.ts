@@ -14,6 +14,7 @@ export interface PropertySpec {
   type: string;
   description: string;
   enum?: string[];
+  items?: { type: string };
 }
 
 export interface ToolResult {
@@ -27,6 +28,7 @@ export interface ToolContext {
   workspaceRoots: string[];
   permission: PermissionDecision;
   signal?: AbortSignal;
+  runtime?: any;
 }
 
 export interface Tool {

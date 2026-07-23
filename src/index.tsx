@@ -12,8 +12,10 @@ import { createProvider } from "./providers/registry.js";
 import { resolveConfig } from "./config/config.js";
 import { ConfigView } from "./ui/views/ConfigView.js";
 import { HelpView } from "./ui/views/HelpView.js";
+import { setupExitHandlers } from "./ui/keypress-parser.js";
 
 try {
+  setupExitHandlers();
   const args = parseArgs(process.argv.slice(2));
 
   if (args.command === "help") {
@@ -44,7 +46,10 @@ try {
           model: config.model ?? config.providerSettings.model,
         });
 
-    render(<App args={args} config={config} provider={provider} showPicker={showPicker} />);
+    render(<App args={args} config={config} provider={provider} showPicker={showPicker} />, {
+      alternateScreen: args.command === "tui",
+      exitOnCtrlC: false,
+    });
   }
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);

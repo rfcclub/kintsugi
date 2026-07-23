@@ -6,6 +6,8 @@ import { OpsLog } from "../memory/ops-store.js";
 import { reconstruct } from "../memory/reconstruct.js";
 import { PermissionPolicy } from "./permissions.js";
 import { createDefaultToolRegistry } from "../tools/builtins.js";
+import { InvokeSubagentTool } from "../tools/invoke-subagent.js";
+import { SendMessageTool } from "../tools/send-message.js";
 import type { LoadedSubstrate } from "./session.js";
 import type { RuntimeOptions, RuntimeMessage, KintsugiRuntime } from "./session.js";
 
@@ -44,7 +46,14 @@ export function bootRuntime(options: RuntimeOptions = {}): KintsugiRuntime {
     startedAt: new Date().toISOString(),
     prompts: [],
     promptConfig: options.promptConfig,
-    toolRegistry: options.toolRegistry ?? createDefaultToolRegistry(),
+    toolRegistry: (() => {
+      const registry = options.toolRegistry ?? createDefaultToolRegistry();
+      if (options.subagentManager) {
+        registry.register(new InvokeSubagentTool(options.subagentManager));
+        registry.register(new SendMessageTool(options.subagentManager));
+      }
+      return registry;
+    })(),
     workspaceRoots: options.workspaceRoots,
     permissionPolicy: options.permissionPolicy ?? new PermissionPolicy(),
     sessionPermissions: {},
@@ -55,6 +64,10 @@ export function bootRuntime(options: RuntimeOptions = {}): KintsugiRuntime {
     memory,
     reconstructedMemory,
     minorMemory,
+    systemInstructions: options.systemInstructions,
+    allowedTools: options.allowedTools,
+    subagentManager: options.subagentManager,
+    subagentDepth: options.subagentDepth,
   };
 }
 

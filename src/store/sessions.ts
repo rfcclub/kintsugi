@@ -1,10 +1,13 @@
 import {
   closeSync,
+  copyFileSync,
   existsSync,
   fdatasyncSync,
   fsyncSync,
   mkdirSync,
   openSync,
+  readFileSync,
+  writeFileSync,
   writeSync,
 } from "node:fs";
 import { randomBytes } from "node:crypto";
@@ -12,17 +15,22 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { RuntimeEvent, TokenUsage } from "../protocol/events.js";
 import type { RuntimeMessage } from "../protocol/messages.js";
+import type { KintsugiRuntime } from "../runtime/session.js";
 
 export const DEFAULT_SESSION_ROOT = join(homedir(), ".kintsugi", "sessions");
 
-export type SessionLine =
+export type SessionLine = (
   | SessionStartLine
   | SessionMessageLine
   | SessionEventLine
   | SessionThinkingLine
   | SessionToolCallLine
   | SessionToolResultLine
-  | SessionEndLine;
+  | SessionEndLine
+) & {
+  turn?: number;
+  gitHash?: string;
+};
 
 export interface SessionStartLine {
   type: "session.start";
@@ -92,6 +100,8 @@ export class SessionWriter {
   readonly root: string;
   readonly startedAt: Date;
   readonly filePath: string;
+  currentTurn?: number;
+  currentGitHash?: string;
   private fd: number | undefined;
   private readonly syncFile: (fd: number) => void;
   private closed = false;
@@ -190,8 +200,14 @@ export class SessionWriter {
       throw new Error(`Session writer is closed: ${this.id}`);
     }
 
+    const fullLine = {
+      ...line,
+      ...(this.currentTurn !== undefined ? { turn: this.currentTurn } : {}),
+      ...(this.currentGitHash !== undefined ? { gitHash: this.currentGitHash } : {}),
+    };
+
     const fd = this.open();
-    writeSync(fd, `${JSON.stringify(line)}\n`, undefined, "utf-8");
+    writeSync(fd, `${JSON.stringify(fullLine)}\n`, undefined, "utf-8");
     this.syncFile(fd);
   }
 
@@ -288,4 +304,99 @@ function syncFd(fd: number): void {
   } catch {
     fsyncSync(fd);
   }
+}
+
+export function truncateSessionLog(filePath: string, turnIndex: number): void {
+  if (!existsSync(filePath)) return;
+  const content = readFileSync(filePath, "utf-8");
+  const lines = content.split("\n");
+  let userPromptCount = 0;
+  let truncateAtLineIndex = -1;
+
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+    if (!trimmed) {
+      continue;
+    }
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed && typeof parsed === "object" && parsed.type === "message" && parsed.role === "user") {
+        userPromptCount++;
+        const currentTurn = parsed.turn !== undefined ? parsed.turn : userPromptCount;
+        if (currentTurn === turnIndex + 1) {
+          truncateAtLineIndex = i;
+          break;
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
+  if (truncateAtLineIndex !== -1) {
+    const keptLines = lines.slice(0, truncateAtLineIndex);
+    writeFileSync(filePath, keptLines.join("\n") + (keptLines.length > 0 ? "\n" : ""), "utf-8");
+  }
+}
+
+export function updateGitHashInSessionLog(filePath: string, turnIndex: number, gitHash: string): void {
+  if (!existsSync(filePath)) return;
+  const content = readFileSync(filePath, "utf-8");
+  const lines = content.split("\n");
+  let userPromptCount = 0;
+  let modified = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+    if (!trimmed) continue;
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed && typeof parsed === "object" && parsed.type === "message" && parsed.role === "user") {
+        userPromptCount++;
+        const currentTurn = parsed.turn !== undefined ? parsed.turn : userPromptCount;
+        if (currentTurn === turnIndex) {
+          parsed.gitHash = gitHash;
+          lines[i] = JSON.stringify(parsed);
+          modified = true;
+          break;
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
+  if (modified) {
+    writeFileSync(filePath, lines.join("\n"), "utf-8");
+  }
+}
+
+export function branchSession(runtime: KintsugiRuntime, branchName: string): string {
+  if (!runtime.sessionId) {
+    throw new Error("No active session to branch");
+  }
+  if (!runtime.sessionWriter) {
+    throw new Error("No session writer found on runtime");
+  }
+
+  const originalId = runtime.sessionId;
+  const originalPath = runtime.sessionWriter.filePath;
+
+  const newId = `${originalId}-branch-${branchName}`;
+  const newPath = originalPath.replace(`${originalId}.jsonl`, `${newId}.jsonl`);
+
+  copyFileSync(originalPath, newPath);
+
+  runtime.sessionWriter.close();
+
+  const newWriter = new SessionWriter({
+    root: runtime.sessionWriter.root,
+    id: newId,
+    startedAt: runtime.sessionWriter.startedAt,
+  });
+
+  runtime.sessionId = newId;
+  runtime.sessionWriter = newWriter;
+
+  return newId;
 }

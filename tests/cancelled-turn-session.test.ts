@@ -44,10 +44,12 @@ describe("cancelled turn session recording", () => {
     expect(
       lines.some((line) => line.type === "message" && line.role === "assistant")
     ).toBe(false);
-    expect(lines).toContainEqual({
-      type: "event",
-      event: { type: "turn.cancelled", reason: "ctrl-c" },
-    });
+    expect(lines).toContainEqual(
+      expect.objectContaining({
+        type: "event",
+        event: { type: "turn.cancelled", reason: "ctrl-c" },
+      })
+    );
   });
 });
 

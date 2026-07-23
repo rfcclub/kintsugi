@@ -1,0 +1,10 @@
+{
+  "change": "mcp-client-integration",
+  "timestamp": "2026-06-20T02:51:27.435Z",
+  "total_scenarios": 3,
+  "passing": 3,
+  "coverage": 1,
+  "threshold": 100,
+  "passed": true,
+  "uncovered": []
+}

@@ -107,21 +107,21 @@ function appendEvent(lines: string[], line: SessionEventLine): void {
   }
 }
 
-function fenceText(text: string): string {
+export function fenceText(text: string): string {
   return text.includes("```")
     ? ["````text", text, "````"].join("\n")
     : text;
 }
 
-function escapeFence(text: string): string {
+export function escapeFence(text: string): string {
   return text.replaceAll("```", "\\`\\`\\`");
 }
 
-function titleCase(value: string): string {
+export function titleCase(value: string): string {
   return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
 }
 
-function formatDate(value: string): string {
+export function formatDate(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
     return value;

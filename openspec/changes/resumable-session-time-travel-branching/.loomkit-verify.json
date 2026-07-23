@@ -1,0 +1,10 @@
+{
+  "change": "resumable-session-time-travel-branching",
+  "timestamp": "2026-06-20T03:03:05.469Z",
+  "total_scenarios": 4,
+  "passing": 4,
+  "coverage": 1,
+  "threshold": 100,
+  "passed": true,
+  "uncovered": []
+}

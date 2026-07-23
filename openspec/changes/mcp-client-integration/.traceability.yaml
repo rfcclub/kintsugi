@@ -1,0 +1,7 @@
+scenarios:
+  - scenario: mcp-configuration-shall-resolve-valid-stdio-server-configurations-parse-valid-stdio-configuration
+    status: passing
+  - scenario: dynamic-mcp-tool-registration-shall-expose-schemas-to-llm-expose-dynamic-tool-schemas
+    status: passing
+  - scenario: execution-loop-shall-route-mcp-tool-calls-to-the-correct-server-dispatch-tool-call-to-server
+    status: passing

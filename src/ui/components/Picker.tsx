@@ -30,6 +30,10 @@ export function Picker({ onPick }: PickerProps) {
   const [modelCursor, setModelCursor] = useState(0);
 
   useInput((input, key) => {
+    if (key.ctrl && input === "c") {
+      process.exit(0);
+    }
+
     if (step === "provider") {
       if (key.upArrow || input === "k") {
         setSelectedIndex((i) => (i > 0 ? i - 1 : PROVIDERS.length - 1));

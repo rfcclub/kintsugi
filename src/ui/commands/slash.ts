@@ -1,18 +1,26 @@
 export type SlashCommandName =
   | "always"
   | "approve"
+  | "clear"
   | "config"
   | "deny"
   | "doctor"
   | "exit"
+  | "export"
   | "help"
   | "memory"
+  | "mode"
   | "model"
   | "new"
+  | "plugin"
+  | "provider"
   | "remember"
+  | "rename"
   | "resume"
+  | "status"
   | "stop"
-  | "threads";
+  | "threads"
+  | "version";
 
 export type SlashParseResult =
   | { type: "not-command"; text: string }
@@ -23,21 +31,29 @@ export type SlashParseResult =
 const COMMANDS = new Set<SlashCommandName>([
   "always",
   "approve",
+  "clear",
   "config",
   "deny",
   "doctor",
   "exit",
+  "export",
   "help",
   "memory",
+  "mode",
   "model",
   "new",
+  "plugin",
+  "provider",
   "remember",
+  "rename",
   "resume",
+  "status",
   "stop",
   "threads",
+  "version",
 ]);
 
-const REQUIRED_ARGS = new Set<SlashCommandName>(["resume"]);
+const REQUIRED_ARGS = new Set<SlashCommandName>(["resume", "rename", "export", "plugin"]);
 
 export function parseSlashCommand(input: string): SlashParseResult {
   const trimmedStart = input.trimStart();

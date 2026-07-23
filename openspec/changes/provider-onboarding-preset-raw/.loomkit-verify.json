@@ -1,0 +1,10 @@
+{
+  "change": "provider-onboarding-preset-raw",
+  "timestamp": "2026-07-21T02:06:02.911Z",
+  "total_scenarios": 33,
+  "passing": 33,
+  "coverage": 1,
+  "threshold": 100,
+  "passed": true,
+  "uncovered": []
+}

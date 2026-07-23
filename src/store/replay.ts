@@ -47,8 +47,10 @@ export function replaySession(reference: string | SessionReference): ReplaySessi
     start?.echo ? { substrate: start.echo } : { noSubstrate: true }
   );
 
+  runtime.sessionId = start?.id;
   runtime.startedAt = start?.startedAt ?? runtime.startedAt;
   runtime.prompts = messages;
+  runtime.messageCount = messages.filter((m) => m.role === "user").length;
 
   return {
     runtime,
@@ -107,7 +109,13 @@ export function resolveSessionPath(reference: string | SessionReference): string
 }
 
 function toRuntimeMessage(line: SessionMessageLine): RuntimeMessage {
-  return { role: line.role, text: line.text, at: line.at };
+  return {
+    role: line.role,
+    text: line.text,
+    at: line.at,
+    turn: line.turn,
+    gitHash: line.gitHash,
+  };
 }
 
 function isSessionLine(value: unknown): value is SessionLine {
@@ -121,6 +129,8 @@ function isSessionLine(value: unknown): value is SessionLine {
       return isSessionStartLine(value);
     case "message":
       return isSessionMessageLine(value);
+    case "thinking":
+      return typeof line.text === "string";
     case "event":
       return typeof line.event === "object" && line.event !== null;
     case "tool.call":

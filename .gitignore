@@ -1,8 +1,13 @@
 node_modules/
 dist/
 coverage/
+!tests/coverage/
 .serena/
 .env
 .env.*
 !.env.example
 npm-debug.log*
+# Provider registration artifacts (secrets + caches) — never commit
+model-cache.json
+*.key
+keys/
